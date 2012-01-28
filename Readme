@@ -1,0 +1,12 @@
+class ImageViewZoom
+public methods:
+ setImage(Bitmap) - Bitmap which you want to show in view(layout)
+ setImage(Bitmap bitmap, int widthOfParent) - you can set maximum width(in pixels) of parent  if you want. But in most cases above will be enough.
+ 
+Extend class and override method
+protected void onImageClick(float posX, float posY)
+to add custom ontouchhandler
+
+Look at example for more.
+ 
+ 
