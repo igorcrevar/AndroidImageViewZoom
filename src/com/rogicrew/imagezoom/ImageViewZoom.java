@@ -30,12 +30,12 @@ public class ImageViewZoom extends LinearLayout {
 	}
 
 	//TODO: put this in some options class
-	private static int distanceZoomMultiplier = 4;
+	private static int distanceZoomMultiplier = 1;
 	public static float minMaxZoom = 2.0f;
-	public static float pinchToZoomMinDistance = 4; //must be greaterequal to 1
+	public static float pinchToZoomMinDistance = 1; //must be greaterequal to 1
 	public static boolean doubleTapZooms = true;
 	public static int maxZoomSteps = 3;
-	public static int angleTolerant = 35;
+	public static int angleTolerant = 50;
 
 	private Rect mSrcRect = new Rect();
 	private Rect mDstRect = new Rect();
@@ -179,7 +179,7 @@ public class ImageViewZoom extends LinearLayout {
 			updateZoomInfo(mMaxZoomWidth, zoomInfo);
 			return;
 		}
-		float newWidth = (float)(mMaxZoomWidth - mMinZoomWidth) * step / maxZoomSteps + mMinZoomWidth;
+		float newWidth = (float)(mMaxZoomWidth - mMinZoomWidth) * (float)step / maxZoomSteps + mMinZoomWidth;
 		updateZoomInfo(newWidth, zoomInfo);		
 	}
 
