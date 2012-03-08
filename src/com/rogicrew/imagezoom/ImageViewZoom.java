@@ -1,6 +1,6 @@
 package com.rogicrew.imagezoom;
 
-import java.lang.reflect.Method;
+import java.util.List;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -8,11 +8,14 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PointF;
 import android.graphics.Rect;
+import android.os.Handler;
 import android.util.AttributeSet;
-import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.LinearLayout;
+
+import com.rogicrew.imagezoom.ontouch.OnTouchInterface;
+import com.rogicrew.imagezoom.ontouch.Pointer;
 
 public class ImageViewZoom extends LinearLayout {
 
@@ -30,13 +33,16 @@ public class ImageViewZoom extends LinearLayout {
 	}
 
 	//TODO: put this in some options class
-	private static int distanceZoomMultiplier = 1;
 	public static float minMaxZoom = 2.0f;
-	public static float pinchToZoomMinDistance = 1; //must be greaterequal to 1
+	public static float pinchToZoomMinDistance = 8; //must be greaterequal to 5
 	public static boolean doubleTapZooms = true;
 	public static int maxZoomSteps = 3;
 	public static int angleTolerant = 50;
-
+	public static long timeForClick = 300;
+	public static long timeForDoubleClick = 300;
+	public static long backgroundQualityUpdateMilis = 2000;
+	public static int distanceZoomMultiplier = 3;
+	
 	private Rect mSrcRect = new Rect();
 	private Rect mDstRect = new Rect();
 	private boolean mIsInChanging = false;
@@ -44,7 +50,6 @@ public class ImageViewZoom extends LinearLayout {
 	private int mCurrentZoomInc = 1;
 
 	private Paint mPaint;
-	private GestureDetector mGestureDetector;
 	private Bitmap mBitmap = null;
 
 	private int mMinZoomWidth = 0;
@@ -54,44 +59,78 @@ public class ImageViewZoom extends LinearLayout {
 
 	protected ZoomInfo mZoomInfo = new ZoomInfo();
 
-	private PointF mFirstFingerStartPoint;
-	private PointF mSecondFingerStartPoint;
-	private boolean mIsTwoFinger = false;
+	private OnTouchInterface onTouchHandler;
 	
-	private Object[] mEmptyObjectArray = new Object[] {};
-	private Object[] mInt1ObjectArray = new Object[] { 1 };
-	private boolean mIsReflectionError = true;
-	private Method mMethodPointerCount;
-	private Method mMethodGetX;
-	private Method mMethodGetY;
-
+	private Handler backgroundQualityUpdateHandler = new Handler();
+	private Runnable backgroundQualityUpdateRunnable = new Runnable() {		
+		@Override
+		public void run() {
+			setPaintQuality(true);
+			stopBackgroundQualityUpdate();
+		}
+	}; 
+	
 	public ImageViewZoom(Context context, AttributeSet attrs) {
 		super(context, attrs);
 
-		//get 2.1+ methods by reflection
-		try {
-			Class<?> eventClass = MotionEvent.class;
-			mMethodPointerCount = eventClass.getMethod("getPointerCount");
-			mMethodGetX = eventClass.getMethod("getX", new Class[] { int.class });
-			mMethodGetY = eventClass.getMethod("getY", new Class[] { int.class });
-			mIsReflectionError = false;
-		}
-		catch(Exception e){
-			mIsReflectionError = true;
-		}
-		
+		InitOnTouchHandler();
 		setOrientation(VERTICAL);
 		//without those settings zoomed bitmap will be full of ugly squares 
 		mPaint = new Paint();
-		mPaint.setAntiAlias(true);
-		mPaint.setFilterBitmap(true);
-		mPaint.setDither(true);
+		setPaintQuality(true);
 
 		//because we are overriding onDraw method
 		this.setWillNotDraw(false);
-		mGestureDetector = new GestureDetector(context, new GestureListener());
+	}
+	
+	
+	/**
+	 * Create onTouchHandler by reflection depending on mulitouch capability of device
+	 */
+	@SuppressWarnings("unchecked")
+	private void InitOnTouchHandler(){
+		ClassLoader classLoader = ImageViewZoom.class.getClassLoader();
+		Class<OnTouchInterface> dynamicClass;
+		//check if there is multitouch
+		try {
+			Class<?> eventClass = MotionEvent.class;
+			eventClass.getMethod("getPointerCount");
+			dynamicClass = (Class<OnTouchInterface>)classLoader.loadClass("com.rogicrew.imagezoom.ontouch.OnTouchMulti");
+			onTouchHandler = dynamicClass.newInstance();
+			//set times by reflection
+			onTouchHandler.create(timeForClick, timeForDoubleClick);
+		}
+		catch(NoSuchMethodException nsme){
+			try {
+				dynamicClass = (Class<OnTouchInterface>)classLoader.loadClass("com.rogicrew.imagezoom.ontouch.OnTouchSingle");
+				onTouchHandler = dynamicClass.newInstance();
+				//set times by reflection
+				onTouchHandler.create(timeForClick, timeForDoubleClick);
+			}
+			catch (Exception e){				
+			}
+		}
+		catch (Exception e){			
+		}
 	}
 
+	protected void setPaintQuality(boolean isHigh) {
+		mPaint.setAntiAlias(isHigh);
+		mPaint.setFilterBitmap(isHigh);
+		mPaint.setDither(isHigh);
+	}
+
+	protected void startBackgroundQualityUpdate(){
+		stopBackgroundQualityUpdate();
+		backgroundQualityUpdateHandler.
+			postDelayed(backgroundQualityUpdateRunnable, backgroundQualityUpdateMilis);
+	}
+	
+	protected void stopBackgroundQualityUpdate(){
+		backgroundQualityUpdateHandler.
+			removeCallbacks(backgroundQualityUpdateRunnable, backgroundQualityUpdateMilis);
+	}
+	
 	public void setVisibility(boolean isVisible) {
 		this.setVisibility(isVisible ? View.VISIBLE : View.GONE);
 	}
@@ -103,7 +142,6 @@ public class ImageViewZoom extends LinearLayout {
 		mMinZoomWidth = widthOfParent <= bitmap.getWidth() ? widthOfParent : bitmap.getWidth(); //try to fit to width if greater than width
 		//if image to small make max zoom minMaxZoom(1.5) times larger than bitmap width
 		mMaxZoomWidth = minMaxZoom * mMinZoomWidth > bitmap.getWidth() ? (int)(minMaxZoom * mMinZoomWidth) : bitmap.getWidth(); 
-		mIsTwoFinger = false;
 		mCurrentZoomStep = 1;
 		mCurrentZoomInc = 1;
 		mScrollRectY = mScrollRectX = 0;
@@ -179,7 +217,7 @@ public class ImageViewZoom extends LinearLayout {
 			updateZoomInfo(mMaxZoomWidth, zoomInfo);
 			return;
 		}
-		float newWidth = (float)(mMaxZoomWidth - mMinZoomWidth) * (float)step / maxZoomSteps + mMinZoomWidth;
+		float newWidth = (float)(mMaxZoomWidth - mMinZoomWidth) * (float)step / (float)maxZoomSteps + mMinZoomWidth;
 		updateZoomInfo(newWidth, zoomInfo);		
 	}
 
@@ -194,43 +232,49 @@ public class ImageViewZoom extends LinearLayout {
 
 	@Override
 	public boolean onTouchEvent(MotionEvent event) {
-		if (mIsReflectionError){			
-			return mGestureDetector.onTouchEvent(event);
+		onTouchHandler.processEvent(event);
+		
+		if (!isImageValid()){ //if image is not ready to manipulate just exit
+			return true;
 		}
 		
-		boolean rv = true;		
-		//if (event.getPointerCount() == 2) // two fingers are active
-		try {
-			if ((Integer)mMethodPointerCount.invoke(event, mEmptyObjectArray) == 2)
-			{
-				PointF newFirstFingerPosition = new PointF(event.getX(), event.getY());
-				//PointF newSecondFingerPosition = new PointF(event.getX(1), event.getY(1));
-				PointF newSecondFingerPosition = new PointF((Float)mMethodGetX.invoke(event, mInt1ObjectArray), 
-															(Float)mMethodGetY.invoke(event, mInt1ObjectArray));
-				
-				if (mIsTwoFinger) {
-					zoomIfPinch(newFirstFingerPosition, newSecondFingerPosition);
-				} else {
-					mFirstFingerStartPoint = newFirstFingerPosition;
-					mSecondFingerStartPoint = newSecondFingerPosition;
-					mIsTwoFinger = true;
-				}
-			} else {
-				mIsTwoFinger = false;
-				rv = mGestureDetector.onTouchEvent(event);
+		if (onTouchHandler.isDoubleClick()){
+			if (doubleTapZooms){
+				Pointer p = onTouchHandler.getClickPoint();
+				doubleTapZoom(p.x, p.y);
 			}
-		} 
-		catch(Exception e){
-			rv = mGestureDetector.onTouchEvent(event);
 		}
-
-		return rv;
+		else if (onTouchHandler.isSingleClick()){
+			Pointer p = onTouchHandler.getClickPoint();
+			float posX = (p.x - mZoomInfo.screenStartX) * mZoomInfo.scaleWidth + mScrollRectX;
+			float posY = (p.y - mZoomInfo.screenStartY) * mZoomInfo.scaleWidth + mScrollRectY;
+			onImageClick(posX, posY);
+		}
+		else if (onTouchHandler.isScroll()){
+			Pointer p = onTouchHandler.getAllPoints().get(0);
+			float distanceX = p.lastX - p.x;
+			float distanceY = p.lastY - p.y;
+			scroll(distanceX, distanceY);
+		}
+		else if (onTouchHandler.isMultitouch() && onTouchHandler.isMove()){
+			List<Pointer> points = onTouchHandler.getAllPoints();
+			if (points.size() == 2){
+				Pointer f = points.get(0);
+				Pointer s = points.get(1);
+				PointF firstOld = new PointF(f.lastX, f.lastY);
+				PointF firstNew = new PointF(f.x, f.y);
+				PointF secondOld = new PointF(s.lastX, s.lastY);
+				PointF secondNew = new PointF(s.x, s.y);
+				zoomIfPinch(firstOld, firstNew, secondOld, secondNew);
+			}
+		}
+		
+		return true; //handled
 	}
 
-	protected boolean zoomIfPinch(PointF newFirst, PointF newSecond) {
-
-		PointF firstFingerDiff = getDifVector(mFirstFingerStartPoint, newFirst);
-		PointF secondFingerDiff = getDifVector(mSecondFingerStartPoint, newSecond);
+	protected boolean zoomIfPinch(PointF firstOld, PointF firstNew, PointF secondOld, PointF secondNew) {
+		PointF firstFingerDiff = getDifVector(firstOld, firstNew);
+		PointF secondFingerDiff = getDifVector(secondOld, secondNew);
 		float firstFingerDistance = getVectorNorm(firstFingerDiff);
 		float secondFingerDistance = getVectorNorm(secondFingerDiff);
 		int distance = (int)(firstFingerDistance + secondFingerDistance);
@@ -239,18 +283,20 @@ public class ImageViewZoom extends LinearLayout {
 			return false;
 		}
 		
-		float angleDiff = Math.abs(getVectorAngle(firstFingerDiff) - getVectorAngle(secondFingerDiff));
-
-		//if one finger didnt move at all we have pinch zoom also
-		if ( (angleDiff < 180 - angleTolerant || angleDiff > 180 + angleTolerant) && firstFingerDistance > 0.0f && secondFingerDistance > 0.0f){
-			return false;
+		//if both fingers has been moved then check if there direction is good for pinch zoom
+		if (firstFingerDistance > 1.0f && secondFingerDistance > 1.0f){
+			float angleDiff = Math.abs(getVectorAngle(firstFingerDiff) - getVectorAngle(secondFingerDiff));
+			
+			if (angleDiff < 180 - angleTolerant || angleDiff > 180 + angleTolerant){
+				return false;
+			}
 		}
-
+		
 		// point beetween two fingers at start - it will be center of new scroll position
-		PointF center = getCenterVector(mFirstFingerStartPoint, mSecondFingerStartPoint);
+		PointF center = getCenterVector(firstOld, secondOld);
 		// difference from start and end points
-		float startDiff = getDistance(mFirstFingerStartPoint, mSecondFingerStartPoint);
-		float endDiff = getDistance(newFirst, newSecond);
+		float startDiff = getDistance(firstOld, secondOld);
+		float endDiff = getDistance(firstNew, secondNew);
 		
 		if (startDiff < endDiff){
 			//zooom in
@@ -261,8 +307,9 @@ public class ImageViewZoom extends LinearLayout {
 			zoomIt(true, -distance * distanceZoomMultiplier, center.x, center.y);
 		}
 		
-		mFirstFingerStartPoint = newFirst;
-		mSecondFingerStartPoint = newSecond;
+		setPaintQuality(false);
+		startBackgroundQualityUpdate();
+
 		return true;
 	}
 
@@ -274,16 +321,19 @@ public class ImageViewZoom extends LinearLayout {
 	}
 
 	protected float getVectorAngle(PointF v) {
-		float norm = getVectorNorm(v);
 		if (v.y == 0) {
-			return v.x >= 0 ? 0 : -180;
+			return v.x >= 0 ? 0 : 180;
 		}
 
+		float norm = getVectorNorm(v);
 		double angle = Math.asin(Math.abs(v.y) / norm) * 180 / Math.PI;
 
 		if (v.y < 0) {
 			if (v.x > 0) {
 				angle = 270 + angle;
+				if (angle >= 360){
+					angle = angle - 360;
+				}
 			} else {
 				angle = 180 + angle;
 			}
@@ -369,35 +419,4 @@ public class ImageViewZoom extends LinearLayout {
 	// ment to be overriden - add some hotspots or simular
 	protected void onImageClick(float posX, float posY) {
 	}
-
-	private class GestureListener extends GestureDetector.SimpleOnGestureListener {
-		// its important that small bitmal is loaded
-		@Override
-		public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
-			if (isImageValid()) {
-				scroll(distanceX, distanceY);
-			}
-			return true;
-		}
-
-		@Override
-		public boolean onDown(MotionEvent e) {
-			if (isImageValid()) {
-				float posX = (e.getX() - mZoomInfo.screenStartX) * mZoomInfo.scaleWidth + mScrollRectX;
-				float posY = (e.getY() - mZoomInfo.screenStartY) * mZoomInfo.scaleWidth + mScrollRectY;
-				onImageClick(posX, posY);
-			}
-			return true;
-		}
-
-		// event when double tap occurs
-		@Override
-		public boolean onDoubleTap(MotionEvent e) {
-			if (isImageValid() && doubleTapZooms) {
-				doubleTapZoom(e.getX(), e.getY());
-			}
-			return true;
-		}
-	}
-
 }
