@@ -41,14 +41,16 @@ public class OnTouchSingle implements OnTouchInterface{
 	public void processEvent(MotionEvent event) {
 		mIsClick = mIsDoubleClick = mIsScroll = false;
 		
-		final int action = event.getAction();		
-		if ((action & MotionEvent.ACTION_DOWN) > 0){
-			 mTimeOfFirstPointerDown = System.currentTimeMillis();
-		     mLastTwoClickPointersOffset = 1 - mLastTwoClickPointersOffset;
-		     mLastTwoClickPointers[mLastTwoClickPointersOffset].update(event.getX(), event.getY(), 0);
-		}
-		else if ((action & MotionEvent.ACTION_UP) > 0){
-		 	if (System.currentTimeMillis() - mTimeOfFirstPointerDown <= mTimeForClick){		       		
+		final int action = event.getAction() & 255;		
+		switch(action){
+		case MotionEvent.ACTION_DOWN:
+			mTimeOfFirstPointerDown = System.currentTimeMillis();
+		    mLastTwoClickPointersOffset = 1 - mLastTwoClickPointersOffset;
+		    mLastTwoClickPointers[mLastTwoClickPointersOffset].update(event.getX(), event.getY(), 0);
+			break;
+			
+		case MotionEvent.ACTION_UP:
+			if (System.currentTimeMillis() - mTimeOfFirstPointerDown <= mTimeForClick){		       		
 	       		if (mTimeOfLastClick > 0  &&  
 	       			System.currentTimeMillis() - mTimeOfLastClick <= mTimeForDoubleClick){
 	       			mIsDoubleClick = true;
@@ -59,12 +61,17 @@ public class OnTouchSingle implements OnTouchInterface{
 	       			mIsClick = true;
 	       		}
 		    }
-		}
-		else if ((action & MotionEvent.ACTION_MOVE) > 0){
+			
+		case MotionEvent.ACTION_MOVE:
 			mLastTwoClickPointers[mLastTwoClickPointersOffset].update(event.getX(), event.getY(), 0);
 	    	 //if there is only one finger pressed
 	    	mIsScroll = true;
-		}    
+			break;
+			
+		case MotionEvent.ACTION_CANCEL:
+			init();
+			break;
+		}
 	}
 
 	@Override

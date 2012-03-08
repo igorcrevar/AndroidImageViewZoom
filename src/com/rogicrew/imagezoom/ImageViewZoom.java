@@ -100,7 +100,12 @@ public class ImageViewZoom extends LinearLayout {
 			//set times by reflection
 			onTouchHandler.create(timeForClick, timeForDoubleClick);
 		}
-		catch(NoSuchMethodException nsme){
+		catch(NoSuchMethodException nsme){		//not exist
+		}
+		catch (Exception e){			
+		}
+		
+		if (onTouchHandler == null){ //if multitouch handler not created create simple one
 			try {
 				dynamicClass = (Class<OnTouchInterface>)classLoader.loadClass("com.rogicrew.imagezoom.ontouch.OnTouchSingle");
 				onTouchHandler = dynamicClass.newInstance();
@@ -109,8 +114,6 @@ public class ImageViewZoom extends LinearLayout {
 			}
 			catch (Exception e){				
 			}
-		}
-		catch (Exception e){			
 		}
 	}
 
