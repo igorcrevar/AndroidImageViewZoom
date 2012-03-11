@@ -32,33 +32,20 @@ public class ImageViewZoom extends LinearLayout {
 		public int screenStartY = 0;
 	}
 
-	//TODO: put this in some options class
-	public static float minMaxZoom = 2.0f;
-	public static float pinchToZoomMinDistance = 8; //must be greaterequal to 5
-	public static boolean doubleTapZooms = true;
-	public static int maxZoomSteps = 3;
-	public static int angleTolerant = 50;
-	public static long timeForClick = 300;
-	public static long timeForDoubleClick = 300;
-	public static long backgroundQualityUpdateMilis = 2000;
-	public static int distanceZoomMultiplier = 3;
+	protected ZoomInfo mZoomInfo = new ZoomInfo();
+	protected ImageViewZoomOptions mOptions = null;
+	protected boolean mIsInChanging = false;
+	protected int mCurrentZoomStep = 1;
+	protected int mCurrentZoomInc = 1;
+	protected int mMinZoomWidth = 0;
+	protected int mMaxZoomWidth = 0;
+	protected int mScrollRectX = 0; // current left location of scroll rect
+	protected int mScrollRectY = 0; // current top location of scroll rect
+	protected Paint mPaint;
+	protected Bitmap mBitmap = null; //actual bitmap we are drawing
 	
 	private Rect mSrcRect = new Rect();
-	private Rect mDstRect = new Rect();
-	private boolean mIsInChanging = false;
-	private int mCurrentZoomStep = 1;
-	private int mCurrentZoomInc = 1;
-
-	private Paint mPaint;
-	private Bitmap mBitmap = null;
-
-	private int mMinZoomWidth = 0;
-	private int mMaxZoomWidth = 0;
-	private int mScrollRectX = 0; // current left location of scroll rect
-	private int mScrollRectY = 0; // current top location of scroll rect
-
-	protected ZoomInfo mZoomInfo = new ZoomInfo();
-
+	private Rect mDstRect = new Rect();	
 	private OnTouchInterface onTouchHandler;
 	
 	private Handler backgroundQualityUpdateHandler = new Handler();
@@ -81,8 +68,7 @@ public class ImageViewZoom extends LinearLayout {
 
 		//because we are overriding onDraw method
 		this.setWillNotDraw(false);
-	}
-	
+	}	
 	
 	/**
 	 * Create onTouchHandler by reflection depending on mulitouch capability of device
@@ -97,8 +83,7 @@ public class ImageViewZoom extends LinearLayout {
 			eventClass.getMethod("getPointerCount");
 			dynamicClass = (Class<OnTouchInterface>)classLoader.loadClass("com.rogicrew.imagezoom.ontouch.OnTouchMulti");
 			onTouchHandler = dynamicClass.newInstance();
-			//set times by reflection
-			onTouchHandler.create(timeForClick, timeForDoubleClick);
+			onTouchHandler.init();
 		}
 		catch(NoSuchMethodException nsme){		//not exist
 		}
@@ -109,14 +94,13 @@ public class ImageViewZoom extends LinearLayout {
 			try {
 				dynamicClass = (Class<OnTouchInterface>)classLoader.loadClass("com.rogicrew.imagezoom.ontouch.OnTouchSingle");
 				onTouchHandler = dynamicClass.newInstance();
-				//set times by reflection
-				onTouchHandler.create(timeForClick, timeForDoubleClick);
+				onTouchHandler.init();				
 			}
 			catch (Exception e){				
 			}
 		}
 	}
-
+	
 	protected void setPaintQuality(boolean isHigh) {
 		mPaint.setAntiAlias(isHigh);
 		mPaint.setFilterBitmap(isHigh);
@@ -126,25 +110,60 @@ public class ImageViewZoom extends LinearLayout {
 	protected void startBackgroundQualityUpdate(){
 		stopBackgroundQualityUpdate();
 		backgroundQualityUpdateHandler.
-			postDelayed(backgroundQualityUpdateRunnable, backgroundQualityUpdateMilis);
+			postDelayed(backgroundQualityUpdateRunnable, mOptions.backgroundQualityUpdateMilis);
 	}
 	
 	protected void stopBackgroundQualityUpdate(){
 		backgroundQualityUpdateHandler.
-			removeCallbacks(backgroundQualityUpdateRunnable, backgroundQualityUpdateMilis);
+			removeCallbacks(backgroundQualityUpdateRunnable, mOptions.backgroundQualityUpdateMilis);
 	}
 	
 	public void setVisibility(boolean isVisible) {
 		this.setVisibility(isVisible ? View.VISIBLE : View.GONE);
 	}
 
-	//must call after layout is loaded and measured
+	/**
+	 * Sets imageviewzoom options
+	 * @param options
+	 */
+	public void setOptions(ImageViewZoomOptions options){
+		mOptions = options;
+		//update times for on touch handler
+		onTouchHandler.setTimes(mOptions.timeForClick, mOptions.timeForDoubleClick);
+	}
+	
+	/**
+	 * Sets bitmap which we want to show and sets parent container width. 
+	 * @param bitmap
+	 * @param widthOfParent width of parent container in pixels
+	 */
 	public void setImage(Bitmap bitmap, int widthOfParent) {
-		mIsInChanging = true;		
+		mIsInChanging = true;
+		if (mOptions == null){
+			setOptions(new ImageViewZoomOptions()); //init default if not exist
+		}
 		mBitmap = bitmap;
-		mMinZoomWidth = widthOfParent <= bitmap.getWidth() ? widthOfParent : bitmap.getWidth(); //try to fit to width if greater than width
-		//if image to small make max zoom minMaxZoom(1.5) times larger than bitmap width
-		mMaxZoomWidth = minMaxZoom * mMinZoomWidth > bitmap.getWidth() ? (int)(minMaxZoom * mMinZoomWidth) : bitmap.getWidth(); 
+		//calculate min/max zoom
+		if (mOptions.minWidth > 0){
+			mMinZoomWidth = mOptions.minWidth;
+		}
+		else if (widthOfParent <= bitmap.getWidth()){ //minimal zoom cannot be greater than parent width
+			mMinZoomWidth = widthOfParent;
+		}
+		else{
+			mMinZoomWidth = bitmap.getWidth();
+		}
+		
+		if (mOptions.maxWidth > 0){
+			mMaxZoomWidth = mOptions.maxWidth;
+		}
+		else if (mOptions.maxWidthMultiplier > 0.0f){
+			mMaxZoomWidth = (int)(mOptions.maxWidthMultiplier * mMinZoomWidth);
+		}
+		else{
+			mMaxZoomWidth = mBitmap.getHeight();
+		}		
+		
 		mCurrentZoomStep = 1;
 		mCurrentZoomInc = 1;
 		mScrollRectY = mScrollRectX = 0;
@@ -154,6 +173,10 @@ public class ImageViewZoom extends LinearLayout {
 		mIsInChanging = false;
 	}
 	
+	/**
+	 * Sets bitmap we want to show. Proxy for setImage(Bitmap bitmap, int widthOfParent). widthOfParent will be current parent container width
+	 * @param bitmap
+	 */
 	public void setImage(Bitmap bitmap) {
 		setImage(bitmap, this.getWidth());
 	}
@@ -161,6 +184,7 @@ public class ImageViewZoom extends LinearLayout {
 	@Override
 	protected void onSizeChanged(int w, int h, int oldw, int oldh) {
 		if (mBitmap != null){
+			//reset image, to correct calculate minWidth and other parameters 
 			setImage(mBitmap, w);
 		}
 	}
@@ -168,7 +192,7 @@ public class ImageViewZoom extends LinearLayout {
 	@Override
 	protected void onDraw(Canvas canvas) {
 		// bitmap not exist or component didnt recieved width yet
-		if (mBitmap != null && this.getWidth() > 0) {
+		if (isImageValid()) {
 			mDstRect.set(mZoomInfo.screenStartX, mZoomInfo.screenStartY, 
 						 mZoomInfo.displayWidth + mZoomInfo.screenStartX, 
 						 mZoomInfo.displayHeight + mZoomInfo.screenStartY);
@@ -216,11 +240,14 @@ public class ImageViewZoom extends LinearLayout {
 			updateZoomInfo(mMinZoomWidth, zoomInfo);
 			return;
 		}
-		else if (step == maxZoomSteps){
+		else if (step == mOptions.maxZoomSteps){
 			updateZoomInfo(mMaxZoomWidth, zoomInfo);
 			return;
 		}
-		float newWidth = (float)(mMaxZoomWidth - mMinZoomWidth) * (float)step / (float)maxZoomSteps + mMinZoomWidth;
+		
+		//decrement step and maxzoomsteps
+		float multiplier = (step - 1.0f) / (mOptions.maxZoomSteps - 1.0f);
+		float newWidth = (float)(mMaxZoomWidth - mMinZoomWidth) * multiplier + mMinZoomWidth;
 		updateZoomInfo(newWidth, zoomInfo);		
 	}
 
@@ -229,7 +256,7 @@ public class ImageViewZoom extends LinearLayout {
 		updateZoomInfo(newWidth, zoomInfo);
 		
 		//for now - reset double tap zoom variables to middle zoom step
-		mCurrentZoomStep = (int)Math.ceil((double)maxZoomSteps / 2);
+		mCurrentZoomStep = (int)Math.ceil((double)mOptions.maxZoomSteps / 2);
 		mCurrentZoomInc = offset > 0 ? 1 : -1;
 	}
 
@@ -242,7 +269,7 @@ public class ImageViewZoom extends LinearLayout {
 		}
 		
 		if (onTouchHandler.isDoubleClick()){
-			if (doubleTapZooms){
+			if (mOptions.isDoubleTapZoomEnabled){
 				Pointer p = onTouchHandler.getClickPoint();
 				doubleTapZoom(p.x, p.y);
 			}
@@ -251,7 +278,10 @@ public class ImageViewZoom extends LinearLayout {
 			Pointer p = onTouchHandler.getClickPoint();
 			float posX = (p.x - mZoomInfo.screenStartX) * mZoomInfo.scaleWidth + mScrollRectX;
 			float posY = (p.y - mZoomInfo.screenStartY) * mZoomInfo.scaleWidth + mScrollRectY;
-			onImageClick(posX, posY);
+			//call click handler only if click in image boundary
+			if (posX >= 0 && posX < mBitmap.getWidth() && posY >= 0 && posY < mBitmap.getHeight()){ 
+				onImageClick(posX, posY);
+			}
 		}
 		else if (onTouchHandler.isScroll()){
 			Pointer p = onTouchHandler.getAllPoints().get(0);
@@ -282,7 +312,7 @@ public class ImageViewZoom extends LinearLayout {
 		float secondFingerDistance = getVectorNorm(secondFingerDiff);
 		int distance = (int)(firstFingerDistance + secondFingerDistance);
 		
-		if (distance < pinchToZoomMinDistance){
+		if (distance < mOptions.pinchToZoomMinDistance){
 			return false;
 		}
 		
@@ -290,7 +320,7 @@ public class ImageViewZoom extends LinearLayout {
 		if (firstFingerDistance > 1.0f && secondFingerDistance > 1.0f){
 			float angleDiff = Math.abs(getVectorAngle(firstFingerDiff) - getVectorAngle(secondFingerDiff));
 			
-			if (angleDiff < 180 - angleTolerant || angleDiff > 180 + angleTolerant){
+			if (angleDiff < 180 - mOptions.angleTolerant || angleDiff > 180 + mOptions.angleTolerant){
 				return false;
 			}
 		}
@@ -303,11 +333,11 @@ public class ImageViewZoom extends LinearLayout {
 		
 		if (startDiff < endDiff){
 			//zooom in
-			zoomIt(true, distance * distanceZoomMultiplier, center.x, center.y);
+			zoomIt(true, (int)(distance * mOptions.distanceZoomMultiplier), center.x, center.y);
 		}
 		else{
 			//zoom out
-			zoomIt(true, -distance * distanceZoomMultiplier, center.x, center.y);
+			zoomIt(true, (int)(-distance * mOptions.distanceZoomMultiplier), center.x, center.y);
 		}
 		
 		setPaintQuality(false);
@@ -398,7 +428,8 @@ public class ImageViewZoom extends LinearLayout {
 			mScrollRectY = mBitmap.getHeight() - mZoomInfo.zoomDisplayHeight;
 		}
 	}
-
+	
+	//image is valid if is set, not in changing state(calculation) and parent container has width
 	protected boolean isImageValid() {
 		return mBitmap != null && !mIsInChanging && getWidth() > 0;
 	}
@@ -412,14 +443,18 @@ public class ImageViewZoom extends LinearLayout {
 
 	protected void doubleTapZoom(float x, float y) {
 		mCurrentZoomStep += mCurrentZoomInc;
-		if (mCurrentZoomStep == maxZoomSteps || mCurrentZoomStep == 1) {
+		if (mCurrentZoomStep == mOptions.maxZoomSteps || mCurrentZoomStep == 1) {
 			mCurrentZoomInc = -mCurrentZoomInc;
 		}
 
 		zoomIt(false, mCurrentZoomStep, x, y);
 	}
 
-	// ment to be overriden - add some hotspots or simular
+	/**
+	 * Handler for onclick on image event. Override this method in child
+	 * @param posX float, x position of finger
+	 * @param posY float, y position of finger
+	 */
 	protected void onImageClick(float posX, float posY) {
 	}
 }

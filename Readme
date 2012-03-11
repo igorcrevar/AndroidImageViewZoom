@@ -5,8 +5,17 @@ public methods:
  
 Extend class and override method
 protected void onImageClick(float posX, float posY)
-to add custom ontouchhandler
+to add custom ontouchhandler (on example try clicking on Homer's head on second picture)
 
-Look at example for more.
- 
- 
+ImageViewZoomOptions:
+minWidth  default: 0 if minWidth == 0 than minWidth = min(parent view width, bitmap width)
+maxWidth default: 0 if > 0 than this width will be for max zoom
+maxWidthMultiplier default: 0 if maxWidth == 0 && maxWidthMultiplier > 0 than maxWidth = minWidth * maxWidthMultiplier
+pinchToZoomMinDistance default: 8 must be greaterequal to 5 -- minimal distance beetween two fingers to perform pinch zoom
+isDoubleTapZoomEnabled default: true  should double tap perform zoom in steps
+maxZoomSteps default: 3 how much zoom steps
+timeForClick default:300 in miliseconds. if finger down/up interval <= timeForClick than click occured 
+timeForDoubleClick default:300 in miliseconds. if two click occured in interval <= timeForDoubleClick we have double click
+distanceZoomMultiplier default:3.0f for pinch zoom - zooming in pixels = move distance * distanceZoomMultiplier
+backgroundQualityUpdateMilis default: 2000
+angleTolerant default: 50 degree tolerance for pinch zoom - leave as it is in most cases

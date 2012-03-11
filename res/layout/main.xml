@@ -4,7 +4,7 @@
     android:layout_height="fill_parent"
     android:orientation="vertical" >
 
-  	<com.rogicrew.imagezoom.ImageViewZoom xmlns:android="http://schemas.android.com/apk/res/android"
+  	<com.rogicrew.imagezoom.example.ImageViewZoomTest xmlns:android="http://schemas.android.com/apk/res/android"
   	    android:id="@+id/imagezoomComponent"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent" />

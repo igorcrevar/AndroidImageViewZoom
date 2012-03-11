@@ -10,7 +10,7 @@ public interface OnTouchInterface {
 	 * @param timeForClick
 	 * @param timeForDoubleClick
 	 */
-	void create(long timeForClick, long timeForDoubleClick);
+	void setTimes(long timeForClick, long timeForDoubleClick);
 	void init();
 	void processEvent (MotionEvent event);
 	boolean isDoubleClick();

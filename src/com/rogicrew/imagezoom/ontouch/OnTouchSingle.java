@@ -26,7 +26,7 @@ public class OnTouchSingle implements OnTouchInterface{
 	}
 	
 	@Override
-	public void create(long timeForClick, long timeForDoubleClick){
+	public void setTimes(long timeForClick, long timeForDoubleClick){
 		mTimeForClick = timeForClick;
 		mTimeForDoubleClick = timeForDoubleClick;
 	}
