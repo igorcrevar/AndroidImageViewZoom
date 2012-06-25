@@ -1,2 +1,4 @@
-bin/
-log/
+library/bin/
+library/gen/
+examples/bin
+examples/gen
