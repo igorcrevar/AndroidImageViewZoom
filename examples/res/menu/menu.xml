@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/picture1"
+          android:title="Picture 1" />
+     <item android:id="@+id/picture2"
+          android:title="Click on Homer's head!" />
+    <item android:id="@+id/picture3"
+          android:title="Picture 3" />
+    <item android:id="@+id/picture4"
+          android:title="Picture 4" />
+</menu>
