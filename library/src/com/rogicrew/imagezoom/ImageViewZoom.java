@@ -306,8 +306,8 @@ public class ImageViewZoom extends LinearLayout {
 	}
 
 	protected boolean zoomIfPinch(PointF firstOld, PointF firstNew, PointF secondOld, PointF secondNew) {
-		PointF firstFingerDiff = getDifVector(firstOld, firstNew);
-		PointF secondFingerDiff = getDifVector(secondOld, secondNew);
+		PointF firstFingerDiff = getDiffVector(firstOld, firstNew);
+		PointF secondFingerDiff = getDiffVector(secondOld, secondNew);
 		float firstFingerDistance = getVectorNorm(firstFingerDiff);
 		float secondFingerDistance = getVectorNorm(secondFingerDiff);
 		int distance = (int)(firstFingerDistance + secondFingerDistance);
@@ -316,14 +316,15 @@ public class ImageViewZoom extends LinearLayout {
 			return false;
 		}
 		
-		//if both fingers has been moved then check if there direction is good for pinch zoom
-		if (firstFingerDistance > 1.0f && secondFingerDistance > 1.0f){
-			float angleDiff = Math.abs(getVectorAngle(firstFingerDiff) - getVectorAngle(secondFingerDiff));
-			
-			if (angleDiff < 180 - mOptions.angleTolerant || angleDiff > 180 + mOptions.angleTolerant){
+		/*//if both fingers has been moved then check if there direction is good for pinch zoom
+		float abAbs = firstFingerDistance * secondFingerDistance;
+		if (abAbs > 0) {
+			float ab = firstFingerDiff.x * secondFingerDiff.x + firstFingerDiff.y * secondFingerDiff.y;
+			double angle = Math.acos(ab / abAbs) * 180 / Math.PI;
+			if (angle < 180 - mOptions.angleTolerant || angle > mOptions.angleTolerant){
 				return false;
 			}
-		}
+		}*/
 		
 		// point beetween two fingers at start - it will be center of new scroll position
 		PointF center = getCenterVector(firstOld, secondOld);
@@ -340,8 +341,10 @@ public class ImageViewZoom extends LinearLayout {
 			zoomIt(true, (int)(-distance * mOptions.distanceZoomMultiplier), center.x, center.y);
 		}
 		
-		setPaintQuality(false);
-		startBackgroundQualityUpdate();
+		if (mOptions.afterPinchZoomSetLowerQualityAndUpdateQualityLater) {
+			setPaintQuality(false);
+			startBackgroundQualityUpdate();
+		}		
 
 		return true;
 	}
@@ -352,38 +355,14 @@ public class ImageViewZoom extends LinearLayout {
 		double value = Math.sqrt(difx * difx + dify * dify);
 		return (float) value;
 	}
-
-	protected float getVectorAngle(PointF v) {
-		if (v.y == 0) {
-			return v.x >= 0 ? 0 : 180;
-		}
-
-		float norm = getVectorNorm(v);
-		double angle = Math.asin(Math.abs(v.y) / norm) * 180 / Math.PI;
-
-		if (v.y < 0) {
-			if (v.x > 0) {
-				angle = 270 + angle;
-				if (angle >= 360){
-					angle = angle - 360;
-				}
-			} else {
-				angle = 180 + angle;
-			}
-		} else if (v.x < 0) {
-			angle = 90 + angle;
-		}
-
-		return (float) angle;
-	}
-
-	protected PointF getDifVector(PointF v1, PointF v2) {
+	
+	protected PointF getDiffVector(PointF v1, PointF v2) {
 		return new PointF(v2.x - v1.x, v2.y - v1.y);
 	}
 
 	protected float getVectorNorm(PointF v) {
-		double value = Math.sqrt(v.x * v.x + v.y * v.y);
-		return (float) value;
+		float value = android.util.FloatMath.sqrt(v.x * v.x + v.y * v.y);
+		return value;
 	}
 
 	protected PointF getCenterVector(PointF v1, PointF v2) {

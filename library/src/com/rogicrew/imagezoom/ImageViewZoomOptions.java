@@ -12,18 +12,20 @@ public class ImageViewZoomOptions {
 	public float distanceZoomMultiplier; //for pinch zoom - zooming in pixels = move distance * distanceZoomMultiplier
 	public long backgroundQualityUpdateMilis; //
 	public int angleTolerant; //degree tolerance for pinch zoom - leave as it is in most cases
+	public boolean afterPinchZoomSetLowerQualityAndUpdateQualityLater; // better to leave false as it is
 	
 	public ImageViewZoomOptions(){
 		minWidth = 0;
 		maxWidth = 0;
 		maxWidthMultiplier = 0.0f;
-		pinchToZoomMinDistance = 8;
+		pinchToZoomMinDistance = 5;
 		isDoubleTapZoomEnabled = true;
 		maxZoomSteps = 3;
-		angleTolerant = 50;
+		angleTolerant = 30;
 		timeForClick = 300;
 		timeForDoubleClick = 300;
 		backgroundQualityUpdateMilis = 2000;
-		distanceZoomMultiplier = 3.0f;
+		distanceZoomMultiplier = 4.0f;
+		afterPinchZoomSetLowerQualityAndUpdateQualityLater = false;
 	}
 }
